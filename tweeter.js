@@ -13,7 +13,8 @@ var options = { url: 'https://api.bitfinex.com/v1/ticker/BTCUSD',
 
 request(options, function (error, response, body) {
   if (!error && response.statusCode == 200) {
-    console.log(body); // Print the google web page.
+    var ticker = JSON.parse(body);
+    console.log(ticker.last); // Print the google web page.
     //var twitter = new twit(config);
     //twitter.post('statuses/update', { status: 'hello world!' });
   } else {
