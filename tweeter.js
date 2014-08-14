@@ -2,9 +2,10 @@ var twit = require('twit');
 var bitfinex = require('bitfinex');
 var fs = require('fs');
 var request = require('request');
+var path = require('path');
 
 // Read Configuration File
-var config = JSON.parse(fs.readFileSync('cfg.json').toString());
+var config = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'cfg.json')).toString());
 
 //var ticker = setInterval(tweetTicker, 15 * 60 * 1000);
 var balance = setInterval(tweetBalance, 15 * 60 * 1000);
