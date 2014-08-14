@@ -21,9 +21,9 @@ fb.api('oauth/access_token', {
     console.log(config.facebook_access_token);
   });
 
-//var ticker = setInterval(tweetTicker, 15 * 60 * 1000);
-//var balance = setInterval(tweetBalance, 15 * 60 * 1000);
-bookBalance();
+//var twitTicker = setInterval(tweetTicker, 15 * 60 * 1000);
+var twitBalance = setInterval(tweetBalance, 15 * 60 * 1000);
+var bookBalance = setInterval(bookBalance, 60 * 60 * 1000);
 
 // This function fetches the latest exchange rate and 
 // tweets an updated ticker
@@ -88,7 +88,7 @@ function bookBalance() {
   bfx.wallet_balances(function(err, res, body){
     if (!err) {
       var balance = parseFloat(res[3].available).toFixed(2);
-   
+  
       // Convert the balance to BTC at current ticker price
       bfx.ticker('BTCUSD', function(err, res, body) {
         if (!err) {
