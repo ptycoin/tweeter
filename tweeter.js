@@ -1,4 +1,5 @@
 var twit = require('twit');
+var irc  = require('irc');
 var bitfinex = require('bitfinex');
 var fs = require('fs');
 var request = require('request');
@@ -7,36 +8,26 @@ var path = require('path');
 // Read Configuration File
 var config = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'cfg.json')).toString());
 
-//var ticker = setInterval(tweetTicker, 15 * 60 * 1000);
-var balance = setInterval(tweetBalance, 15 * 60 * 1000);
+// Setup Balance Variables
+var data = { 'ticker': 0, 'balance': 0 };
+updateBalance();
+var balUpdate = setInterval(updateBalance, 60 * 1000);
 
-// This function fetches the latest exchange rate and 
-// tweets an updated ticker
-function tweetTicker() {
-  // Fetch latest price
-  var options = { url: 'https://api.bitfinex.com/v1/pubticker/BTCUSD',
-                  headers: { 'User-Agent': 'PTYcoin Tweeter' },
-                  timeout: 15000
-                };
-  request(options, function (error, response, body) {
-    if (!error && response.statusCode == 200) {
+// Sets up IRC Bot
+var bot = new irc.Client(config.irc.server, config.irc.botName, { channels : config.irc.channels });
+//bot.addListener('raw', function (message) { console.log(message); });
+//bot.addListener('error', function(message) { console.log('error: ', message); });
+//bot.addListener('registered', function(message) { console.log('registered: ', message); });
+//bot.addListener('message', function(nick, to, text, message) { console.log('message: ', text); });
+bot.addListener('join', function(channel, nick, message) { updateIRC([ channel ]); });
+var ircUpdate = setInterval(updateIRC(config.irc.channels), config.frequency * 60 * 1000);
+ 
+// Setup Twitter Update
+var twitter = new twit(config);
+updateTwitter();
+var twitterUpdate = setInterval(updateTwitter, config.frequency * 60 * 1000);
 
-      // Extract the ticker price
-      var ticker = JSON.parse(body);
-      var price = parseFloat(ticker.ask).toFixed(2);
-
-      // Tweet the price
-      var msg = 'The latest PTYcoin market price for buying #bitcoin in #Panama is $' + price + '! http://ptycoin.com/buy';
-      var twitter = new twit(config);
-      twitter.post('statuses/update', { status: msg }, function(err, data, response) { console.log(msg) });
-
-    } else {
-      console.log(error);
-    }
-  });
-}
-
-function tweetBalance() {
+function updateBalance() {
   var bfx = new bitfinex(config.bitfinex_api, config.bitfinex_secret);
   
   // Fetch Balance
@@ -47,15 +38,9 @@ function tweetBalance() {
       // Convert the balance to BTC at current ticker price
       bfx.ticker('BTCUSD', function(err, res, body) {
         if (!err) {
-          var ticker = parseFloat(res.ask).toFixed(2);
-          var btc = balance / ticker;
-
-          // Tweet the balance
-          var msg = 'PTYcoin currently has ' + btc.toFixed(4) + 
-                    ' BTC available at $' + ticker + ' + 1% fee. ' +
-                    '#bitcoin #panama http://ptycoin.com/buy';
-          var twitter = new twit(config);
-          twitter.post('statuses/update', { status: msg }, function(err, data, response) { console.log(msg) });
+          data.ticker = parseFloat(res.ask).toFixed(2);
+          data.balance = balance / data.ticker;
+          data.balance = data.balance.toFixed(4);
         } else {
           console.log(err);
         }
@@ -64,4 +49,30 @@ function tweetBalance() {
       console.log(err);
     }
   });
+}
+
+function updateIRC(channels) {
+  if (data.ticker > 0 && data.balance > 0) {
+    var msg = 'PTYcoin currently has ' + data.balance + 
+              ' BTC available at $' + data.ticker + ' + 1% fee. ' +
+              'http://ptycoin.com/buy';
+
+    for (i=0; i < channels.length; i++) {
+      console.log(channels[i], '-', msg);
+      bot.say(channels[i], msg);
+    }
+  }
+}
+
+function updateTwitter() {
+  if (data.ticker > 0 && data.balance > 0) {
+    var msg = 'PTYcoin currently has ' + data.balance + 
+              ' BTC available at $' + data.ticker + ' + 1% fee. ' +
+              '#bitcoin #panama http://ptycoin.com/buy';
+
+    twitter.post('statuses/update', { status: msg }, 
+                 function(err, data, response) { 
+                   console.log('Twitter -', msg) 
+                 });
+  }
 }
