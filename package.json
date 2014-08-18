@@ -6,6 +6,7 @@
   "dependencies": {
     "twit": "*",
     "bitfinex": "*",
-    "irc": "*"
+    "irc": "*",
+    "ws": "*"
   }
 }

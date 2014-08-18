@@ -1,6 +1,7 @@
 var twit = require('twit');
 var irc  = require('irc');
 var bitfinex = require('bitfinex');
+var ws = require('ws');
 var fs = require('fs');
 var request = require('request');
 var path = require('path');
@@ -10,8 +11,16 @@ var config = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'cfg.json')).toS
 
 // Setup Balance Variables
 var data = { 'ticker': 0, 'balance': 0 };
-updateBalance();
-var balUpdate = setInterval(updateBalance, 60 * 1000);
+var rippledata = { 'bid': 0, 'ask': 0 };
+
+//updateBalance();
+//var balUpdate = setInterval(updateBalance, 60 * 1000);
+
+// Sets up Ripple Websocket
+var ripple = new ws(config.ripple.server);
+ripple.on('open', updateRipple);
+ripple.on('message', parseRipple);
+var rippleUpdate = setInterval(updateRipple, 60 * 1000);
 
 // Sets up IRC Bot
 var bot = new irc.Client(config.irc.server, config.irc.botName, { channels : config.irc.channels });
@@ -24,7 +33,6 @@ var ircUpdate = setInterval(updateIRC(config.irc.channels), config.frequency * 6
  
 // Setup Twitter Update
 var twitter = new twit(config);
-updateTwitter();
 var twitterUpdate = setInterval(updateTwitter, config.frequency * 60 * 1000);
 
 function updateBalance() {
@@ -51,11 +59,55 @@ function updateBalance() {
   });
 }
 
+function updateRipple() {
+  // Fetch Bid and Ask 
+  var bid = { command : "book_offers",
+              limit: 1,
+              taker_gets : {
+                  currency : "USD",
+                  issuer : config.ripple.address
+              },
+              taker_pays : {
+                  currency : "BTC",
+                  issuer : config.ripple.address
+              }
+            };
+  var ask = { command : "book_offers",
+              limit: 1,
+              taker_gets : {
+                  currency : "BTC",
+                  issuer : config.ripple.address
+              },
+              taker_pays : {
+                  currency : "USD",
+                  issuer : config.ripple.address
+              }
+            };
+  ripple.send(JSON.stringify(bid));
+  ripple.send(JSON.stringify(ask));
+}
+
+function parseRipple(data, flags) {
+  var json = JSON.parse(data);
+  if (json.status == "success") { 
+    if (json.result.offers.length >= 1) {
+      if (json.result.offers[0].TakerGets.currency == 'USD') {
+        rippledata.bid = parseFloat(json.result.offers[0].TakerGets.value) / parseFloat(json.result.offers[0].TakerPays.value);
+        rippledata.bid = rippledata.bid.toFixed(2);
+      }
+      if (json.result.offers[0].TakerGets.currency == 'BTC') {
+        rippledata.ask = parseFloat(json.result.offers[0].TakerPays.value) / parseFloat(json.result.offers[0].TakerGets.value);
+        rippledata.ask = rippledata.ask.toFixed(2);
+      }
+    } 
+    console.log('bid', rippledata.bid, '- ask', rippledata.ask);
+  }
+}
+
 function updateIRC(channels) {
-  if (data.ticker > 0 && data.balance > 0) {
-    var msg = 'PTYcoin currently has ' + data.balance + 
-              ' BTC available at $' + data.ticker + ' + 1% fee. ' +
-              'http://ptycoin.com/buy';
+  if (rippledata.bid > 0 || rippledata.ask > 0) {
+    var msg = 'PTYcoin Ripple Exchange Rates for BTC/USD: Bid $' + rippledata.bid + 
+              ', Ask $' + rippledata.ask + ' #bitcoin #panama http://ptycoin.com/ripple';
 
     for (i=0; i < channels.length; i++) {
       console.log(channels[i], '-', msg);
@@ -66,9 +118,11 @@ function updateIRC(channels) {
 
 function updateTwitter() {
   if (data.ticker > 0 && data.balance > 0) {
-    var msg = 'PTYcoin currently has ' + data.balance + 
-              ' BTC available at $' + data.ticker + ' + 1% fee. ' +
-              '#bitcoin #panama http://ptycoin.com/buy';
+    //var msg = 'PTYcoin currently has ' + data.balance + 
+    //          ' BTC available at $' + data.ticker + ' + 1% fee. ' +
+    //          '#bitcoin #panama http://ptycoin.com/buy';
+    var msg = 'PTYcoin Ripple Exchange Rates for BTC/USD: Bid $' + rippledata.bid + 
+              ', Ask $' + rippledata.ask + ' #bitcoin #panama ptycoin.com/ripple';
 
     twitter.post('statuses/update', { status: msg }, 
                  function(err, data, response) { 
