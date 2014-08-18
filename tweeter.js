@@ -100,7 +100,6 @@ function parseRipple(data, flags) {
         rippledata.ask = rippledata.ask.toFixed(2);
       }
     } 
-    console.log('bid', rippledata.bid, '- ask', rippledata.ask);
   }
 }
 
